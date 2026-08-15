@@ -274,6 +274,9 @@ Run the PiControl server automatically on boot:
 
 ## 🛠️ Troubleshooting
 
+- **Error: `Unhandled Promise Rejection: Cannot read properties of undefined (reading 'importKey')`**
+  - **Cause**: Modern web browsers (Chrome, Edge, Firefox, Safari) disable the `window.crypto.subtle` API when accessing web apps over non-secure HTTP LAN IPs (e.g. `http://10.82.32.172:3000` or `http://192.168.x.x:3000`).
+  - **Solution**: PiControl includes a built-in WebCrypto Subtle Polyfill Shim in [`public/index.html`](public/index.html) so noVNC and encryption components run smoothly over HTTP LAN IP connections without throwing promise rejections.
 - **Error: `Cannot find module 'ssh2'` or `express`**
   - Solution: Run `npm install` in the project directory.
 - **Port 3000 is in use:**
