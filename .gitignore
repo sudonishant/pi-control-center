@@ -1,0 +1,28 @@
+# Node dependency directory
+node_modules/
+
+# Electron-builder output directory
+dist/
+
+# Env file
+.env
+
+# Express uploads or temp files
+uploads/
+*.log
+
+# Android-specific files to ignore
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+android/app/src/main/assets/www/
+android/.idea/
+android/*.iml
+android/app/*.iml
+
+# System & Scratch files
+.DS_Store
+Thumbs.db
+scratch/
+*.zip

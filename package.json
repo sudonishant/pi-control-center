@@ -1,0 +1,63 @@
+{
+  "name": "pi-control-center",
+  "version": "1.0.0",
+  "description": "Raspberry Pi SSH Control Center",
+  "main": "main.js",
+  "author": {
+    "name": "PiControl",
+    "email": "picontrol@localhost.com"
+  },
+  "homepage": "https://github.com/picontrol/pi-control-center",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/picontrol/pi-control-center"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "rm -rf node_modules/cpu-features node_modules/ssh2/lib/protocol/crypto/build && ELECTRON_DISABLE_SANDBOX=1 electron .",
+    "package": "rm -rf node_modules/cpu-features node_modules/ssh2/lib/protocol/crypto/build && ELECTRON_DISABLE_SANDBOX=1 electron-builder",
+    "package:linux": "rm -rf node_modules/cpu-features node_modules/ssh2/lib/protocol/crypto/build && ELECTRON_DISABLE_SANDBOX=1 electron-builder --linux",
+    "package:win": "rm -rf node_modules/cpu-features node_modules/ssh2/lib/protocol/crypto/build && ELECTRON_DISABLE_SANDBOX=1 electron-builder --win"
+  },
+  "dependencies": {
+    "@novnc/novnc": "^1.7.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.8.3",
+    "ssh2": "^1.16.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.picontrol.app",
+    "productName": "PiControl",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!generate_icons.py"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "public/icons/icon-512.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/icons/icon-512.png",
+      "category": "Utility",
+      "maintainer": "PiControl <picontrol@localhost.com>"
+    }
+  }
+}

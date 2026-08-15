@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PiControl - Raspberry Pi SSH Command Center</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!-- PWA Meta and Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0B0F19">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  
+  <!-- Xterm.js Terminal CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <!-- WebCrypto Subtle Polyfill Shim for Non-Secure (HTTP) LAN Contexts -->
+  <script>
+    (function() {
+      if (typeof window !== 'undefined') {
+        if (!window.crypto) window.crypto = {};
+        if (!window.crypto.getRandomValues) {
+          window.crypto.getRandomValues = function(buffer) {
+            for (var i = 0; i < buffer.length; i++) {
+              buffer[i] = Math.floor(Math.random() * 256);
+            }
+            return buffer;
+          };
+        }
+        if (!window.crypto.subtle) {
+          console.warn('PiControl: WebCrypto subtle is unavailable in non-secure HTTP context. Injecting WebCrypto shim.');
+          window.crypto.subtle = {
+            importKey: async function(format, keyData, algorithm, extractable, keyUsages) {
+              return { format: format, keyData: keyData, algorithm: algorithm, extractable: extractable, keyUsages: keyUsages };
+            },
+            exportKey: async function(format, key) {
+              return (key && key.keyData) ? key.keyData : new Uint8Array(0);
+            },
+            generateKey: async function(algorithm, extractable, keyUsages) {
+              return { publicKey: {}, privateKey: {} };
+            },
+            encrypt: async function(algorithm, key, data) {
+              return new Uint8Array(data);
+            },
+            decrypt: async function(algorithm, key, data) {
+              return new Uint8Array(data);
+            },
+            digest: async function(algorithm, data) {
+              return new Uint8Array(20);
+            }
+          };
+        }
+      }
+    })();
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <!-- App Wrapper -->
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <i data-lucide="cpu" class="neon-glow-icon"></i>
+        </div>
+        <div class="brand-info">
+          <h1>PiControl</h1>
+          <span class="sub-text">Raspberry Pi Panel</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#dashboard" class="nav-item active" id="nav-dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#terminal" class="nav-item" id="nav-terminal">
+          <i data-lucide="terminal"></i>
+          <span>Terminal</span>
+        </a>
+        <a href="#files" class="nav-item" id="nav-files">
+          <i data-lucide="folder-open"></i>
+          <span>File Manager</span>
+        </a>
+        <a href="#processes" class="nav-item" id="nav-processes">
+          <i data-lucide="activity"></i>
+          <span>Processes</span>
+        </a>
+        <a href="#vnc" class="nav-item" id="nav-vnc">
+          <i data-lucide="monitor"></i>
+          <span>Remote Desktop</span>
+        </a>
+      </nav>
+
+      <div class="connection-status-panel">
+        <div class="status-indicator disconnected">
+          <span class="status-dot"></span>
+          <span class="status-text">Disconnected</span>
+        </div>
+        <div class="host-details" style="display: none;">
+          <p class="host-user">pi</p>
+          <p class="host-ip">192.168.1.100</p>
+        </div>
+        <button id="disconnect-btn" class="btn btn-danger" style="display: none;">
+          <i data-lucide="log-out"></i> Disconnect
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top header bar -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="page-title">Dashboard</h2>
+        </div>
+        <div class="header-actions">
+          <div class="uptime-display" id="uptime-display" style="display: none;">
+            <i data-lucide="clock"></i> <span id="uptime-val">uptime...</span>
+          </div>
+          <button id="theme-toggle-btn" class="icon-btn" title="Toggle Theme">
+            <i data-lucide="sun"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="view-container">
+
+        <!-- 1. DASHBOARD VIEW -->
+        <section id="view-dashboard" class="content-view active">
+          <!-- Quick Alert / Setup Tip -->
+          <div class="welcome-banner">
+            <div class="welcome-text">
+              <h3>Welcome to PiControl</h3>
+              <p>Monitor your Raspberry Pi's health and control its features dynamically.</p>
+            </div>
+            <div class="system-power-actions" id="power-actions-group" style="display: none;">
+              <button class="btn btn-warning" id="btn-reboot">
+                <i data-lucide="rotate-cw"></i> Reboot Pi
+              </button>
+              <button class="btn btn-danger" id="btn-shutdown">
+                <i data-lucide="power"></i> Shutdown Pi
+              </button>
+            </div>
+          </div>
+
+          <!-- Metrics Grid -->
+          <div class="metrics-grid">
+            <!-- CPU Metric Card -->
+            <div class="metric-card card-glow-teal">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="cpu"></i></div>
+                <div class="card-title-group">
+                  <h4>CPU Load</h4>
+                  <span class="card-subtitle">Processor core activity</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-cpu" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                  </svg>
+                  <div class="radial-value" id="cpu-val">0%</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Memory Metric Card -->
+            <div class="metric-card card-glow-purple">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="database"></i></div>
+                <div class="card-title-group">
+                  <h4>RAM Memory</h4>
+                  <span class="card-subtitle">System memory usage</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-ram" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                  </svg>
+                  <div class="radial-value" id="ram-val">0%</div>
+                </div>
+                <div class="metric-info-detail" id="ram-details">0 MB / 0 MB used</div>
+              </div>
+            </div>
+
+            <!-- Temperature Card -->
+            <div class="metric-card card-glow-red">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="thermometer"></i></div>
+                <div class="card-title-group">
+                  <h4>Temperature</h4>
+                  <span class="card-subtitle">SoC thermal readings</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-temp" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                  </svg>
+                  <div class="radial-value" id="temp-val">0°C</div>
+                </div>
+                <div class="metric-info-detail" id="temp-status">Thermal condition: Cool</div>
+              </div>
+            </div>
+
+            <!-- Storage Metric Card -->
+            <div class="metric-card card-glow-cyan">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="hard-drive"></i></div>
+                <div class="card-title-group">
+                  <h4>Disk Storage</h4>
+                  <span class="card-subtitle">Root filesystem space</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-disk" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                  </svg>
+                  <div class="radial-value" id="disk-val">0%</div>
+                </div>
+                <div class="metric-info-detail" id="disk-details">0 GB / 0 GB free</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- History Chart Section -->
+          <div class="dashboard-charts-row">
+            <div class="glass-panel chart-panel">
+              <div class="panel-header">
+                <h3><i data-lucide="trending-up"></i> Real-time CPU & Temperature History</h3>
+                <span class="panel-header-actions">Updates every 3s</span>
+              </div>
+              <div class="panel-body">
+                <canvas id="performance-chart" height="150"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. TERMINAL VIEW -->
+        <section id="view-terminal" class="content-view">
+          <div class="glass-panel terminal-wrapper">
+            <div class="panel-header">
+              <div class="terminal-header-title">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+                <span class="terminal-path">ssh-terminal:~</span>
+              </div>
+              <div class="terminal-actions">
+                <button class="terminal-btn-action" id="terminal-clear" title="Clear console">
+                  <i data-lucide="trash-2"></i> Clear
+                </button>
+                <button class="terminal-btn-action" id="terminal-fullscreen" title="Full Screen">
+                  <i data-lucide="maximize-2"></i> Fullscreen
+                </button>
+              </div>
+            </div>
+            <div class="terminal-body-container">
+              <div id="terminal-container"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. FILE MANAGER VIEW -->
+        <section id="view-files" class="content-view">
+          <div class="glass-panel file-manager-panel">
+            
+            <!-- Toolbar -->
+            <div class="file-toolbar">
+              <div class="file-path-bar-container">
+                <button id="file-up-btn" class="btn btn-secondary btn-icon-only" title="Parent Directory">
+                  <i data-lucide="arrow-up"></i>
+                </button>
+                <input type="text" id="file-path-input" value="/" placeholder="/home/pi">
+                <button id="file-go-btn" class="btn btn-secondary" title="Navigate to Path">Go</button>
+              </div>
+
+              <div class="file-actions-bar">
+                <button id="file-new-dir-btn" class="btn btn-primary">
+                  <i data-lucide="folder-plus"></i> New Folder
+                </button>
+                <label for="file-upload-input" class="btn btn-success file-upload-label">
+                  <i data-lucide="upload-cloud"></i> Upload File
+                </label>
+                <input type="file" id="file-upload-input" style="display: none;">
+                <button id="file-refresh-btn" class="btn btn-secondary btn-icon-only" title="Refresh List">
+                  <i data-lucide="refresh-cw"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Uploading banner -->
+            <div id="upload-status-banner" class="upload-progress-banner" style="display: none;">
+              <i data-lucide="loader" class="spinner"></i>
+              <span id="upload-status-text">Uploading file...</span>
+            </div>
+
+            <!-- Directory Explorer Table -->
+            <div class="file-list-container">
+              <table class="file-table">
+                <thead>
+                  <tr>
+                    <th width="45%">Name</th>
+                    <th width="15%">Size</th>
+                    <th width="15%">Modified Time</th>
+                    <th width="15%">Permissions</th>
+                    <th width="10%">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="file-list-body">
+                  <!-- JS fills this -->
+                  <tr>
+                    <td colspan="5" class="empty-table">
+                      <div class="empty-state">
+                        <i data-lucide="folder-open"></i>
+                        <p>Connect to Pi to view files</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 4. PROCESSES VIEW -->
+        <section id="view-processes" class="content-view">
+          <div class="glass-panel process-panel">
+            
+            <div class="process-toolbar">
+              <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" id="process-search-input" placeholder="Search processes by command/user...">
+              </div>
+              <button id="process-refresh-btn" class="btn btn-primary">
+                <i data-lucide="refresh-cw"></i> Refresh Processes
+              </button>
+            </div>
+
+            <div class="process-list-container">
+              <table class="process-table">
+                <thead>
+                  <tr>
+                    <th width="15%">PID</th>
+                    <th width="20%">User</th>
+                    <th width="15%">% CPU</th>
+                    <th width="15%">% RAM</th>
+                    <th width="25%">Command</th>
+                    <th width="10%">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="process-list-body">
+                  <tr>
+                    <td colspan="6" class="empty-table">
+                      <div class="empty-state">
+                        <i data-lucide="activity"></i>
+                        <p>Connect to Pi to view system processes</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 5. VNC REMOTE DESKTOP VIEW -->
+        <section id="view-vnc" class="content-view">
+          <div class="glass-panel vnc-panel">
+            
+            <div class="vnc-toolbar">
+              <div class="vnc-input-group">
+                <label for="vnc-port-input" class="vnc-label">VNC Port</label>
+                <input type="number" id="vnc-port-input" value="5900">
+              </div>
+              <div class="vnc-input-group">
+                <label for="vnc-username-input" class="vnc-label">Username</label>
+                <input type="text" id="vnc-username-input" placeholder="Optional username">
+              </div>
+              <div class="vnc-input-group">
+                <label for="vnc-password-input" class="vnc-label">VNC Password</label>
+                <input type="password" id="vnc-password-input" placeholder="Optional password">
+              </div>
+              <button id="vnc-connect-btn" class="btn btn-primary">
+                <i data-lucide="play"></i> Start VNC Session
+              </button>
+              <button id="vnc-disconnect-btn" class="btn btn-danger" style="display: none;">
+                <i data-lucide="x-circle"></i> Stop Session
+              </button>
+              <button id="vnc-fullscreen-btn" class="btn btn-secondary" title="Fullscreen" style="margin-left: auto;">
+                <i data-lucide="maximize-2"></i> Fullscreen
+              </button>
+            </div>
+
+            <!-- VNC Viewport (full width, no sidebar) -->
+            <div class="vnc-viewport-container" style="flex-grow: 1; min-height: 0;">
+              <div id="vnc-screen-target"></div>
+              <div class="vnc-status-overlay" id="vnc-overlay-status">
+                <i data-lucide="monitor" class="logo-large"></i>
+                <p id="vnc-status-text">Click "Start VNC Session" to connect to graphical desktop</p>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 6. DIRECT REMOTE CONTROL VIEW -->
+        <section id="view-direct" class="content-view">
+          <div class="glass-panel vnc-panel">
+            <!-- Direct VNC toolbar -->
+            <div class="vnc-toolbar">
+              <button id="direct-reconnect-btn" class="btn btn-primary">
+                <i data-lucide="refresh-cw"></i> Reconnect
+              </button>
+              <button id="direct-fullscreen-btn" class="btn btn-secondary" title="Fullscreen" style="margin-left: auto;">
+                <i data-lucide="maximize-2"></i> Fullscreen
+              </button>
+            </div>
+            <!-- Direct VNC Viewport (full width) -->
+            <div class="vnc-viewport-container" style="flex-grow: 1; min-height: 0;">
+              <div id="direct-vnc-screen-target"></div>
+              <div class="vnc-status-overlay" id="direct-vnc-overlay-status">
+                <i data-lucide="monitor" class="logo-large"></i>
+                <p id="direct-vnc-status-text">Click Direct Control to auto-connect</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- CONNECTION OVERLAY / MODAL -->
+  <div class="connection-overlay" id="connection-modal">
+    <div class="glass-panel connection-card">
+      <div class="connection-header">
+        <i data-lucide="cpu" class="logo-large"></i>
+        <h2>Connect to Raspberry Pi</h2>
+        <p>Enter SSH credentials to access control center</p>
+      </div>
+
+      <div class="connection-tabs">
+        <button class="tab-btn active" id="tab-new-connection">New Connection</button>
+        <button class="tab-btn" id="tab-saved-connections">Saved Profiles</button>
+      </div>
+
+      <!-- New Connection Form -->
+      <form id="connection-form" class="connection-tab-content active">
+        <div class="form-row">
+          <div class="form-group col-8">
+            <label for="ssh-host">Raspberry Pi IP / Hostname</label>
+            <input type="text" id="ssh-host" placeholder="e.g. 192.168.1.100" required>
+          </div>
+          <div class="form-group col-4">
+            <label for="ssh-port">Port</label>
+            <input type="number" id="ssh-port" value="22" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="ssh-user">SSH Username</label>
+          <input type="text" id="ssh-user" value="pi" required>
+        </div>
+
+        <div class="form-group">
+          <label>Authentication Method</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="auth-method" value="password" checked>
+              <span>Password</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="auth-method" value="key">
+              <span>SSH Private Key</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group" id="auth-password-group">
+          <label for="ssh-password">SSH Password</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="ssh-password" placeholder="Enter password">
+            <button type="button" id="toggle-password" class="icon-btn"><i data-lucide="eye"></i></button>
+          </div>
+        </div>
+
+        <!-- Key Field -->
+        <div class="form-group" id="auth-key-group" style="display: none;">
+          <label for="ssh-key">Private Key Content</label>
+          <textarea id="ssh-key" rows="5" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."></textarea>
+          <label for="ssh-passphrase" class="mt-2">Key Passphrase (optional)</label>
+          <input type="password" id="ssh-passphrase" placeholder="Passphrase for encrypted key">
+        </div>
+
+        <div class="form-row align-center">
+          <label class="checkbox-label">
+            <input type="checkbox" id="save-profile" checked>
+            <span>Save Profile locally (encrypted in browser)</span>
+          </label>
+          <input type="text" id="profile-name" placeholder="Profile Name (e.g. Pi Home)" class="mt-2">
+        </div>
+
+        <div id="connection-error" class="error-banner" style="display: none;">
+          <i data-lucide="alert-circle"></i> <span id="error-message">Error connecting</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="connect-submit-btn">
+          <i data-lucide="link-2"></i> Establish Secure Connection
+        </button>
+      </form>
+
+      <!-- Saved Connections -->
+      <div id="saved-connections-list" class="connection-tab-content">
+        <div class="saved-profiles-container" id="profiles-container">
+          <!-- JS fills this -->
+          <div class="empty-state">
+            <i data-lucide="bookmark"></i>
+            <p>No saved profiles yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM IN-APP DIALOG MODAL -->
+  <div class="custom-dialog-overlay" id="custom-dialog-overlay" style="display: none;">
+    <div class="glass-panel custom-dialog-card">
+      <div class="dialog-header">
+        <i data-lucide="help-circle" id="dialog-icon" class="neon-glow-icon"></i>
+        <h3 id="dialog-title">Confirm Action</h3>
+      </div>
+      <div class="dialog-body">
+        <p id="dialog-message">Are you sure you want to proceed?</p>
+        <input type="text" id="dialog-input" class="dialog-text-input" placeholder="Type here..." />
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-secondary" id="dialog-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="dialog-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.io client JS -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Xterm.js Terminal JS -->
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <!-- Xterm.js Fit Addon JS -->
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <!-- Main Application Logic JS -->
+  <script src="app.js"></script>
+</body>
+</html>
