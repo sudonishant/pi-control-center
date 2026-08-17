@@ -77,9 +77,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Auto load native embedded web app assets by default
-        String savedUrl = sharedPreferences.getString(KEY_SERVER_URL, "file:///android_asset/www/index.html");
-        loadServerUrl(savedUrl);
+        // Auto load native embedded web app assets
+        loadServerUrl("file:///android_asset/www/index.html");
     }
 
     private String formatServerUrl(String raw) {
@@ -165,9 +164,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 progressBar.setVisibility(View.GONE);
-                webView.setVisibility(View.GONE);
-                setupLayout.setVisibility(View.VISIBLE);
-                Toast.makeText(MainActivity.this, "Failed connecting to PiControl server. Check IP & connection.", Toast.LENGTH_LONG).show();
             }
         });
 
@@ -226,14 +222,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (webView.getVisibility() == View.VISIBLE) {
-            if (webView.canGoBack()) {
-                webView.goBack();
-            } else {
-                webView.setVisibility(View.GONE);
-                setupLayout.setVisibility(View.VISIBLE);
-                Toast.makeText(this, "Disconnected from dashboard. You can enter a new server IP.", Toast.LENGTH_SHORT).show();
-            }
+        if (webView.canGoBack()) {
+            webView.goBack();
         } else {
             super.onBackPressed();
         }

@@ -10,9 +10,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#0B0F19"
-        android:visibility="gone" />
+        android:visibility="visible" />
 
-    <!-- Setup IP Input Screen -->
+    <!-- Setup Layout (Hidden by Default) -->
     <LinearLayout
         android:id="@+id/setup_layout"
         android:layout_width="match_parent"
@@ -20,7 +20,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:padding="24dp"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <!-- Glassmorphism Container Card -->
         <LinearLayout
