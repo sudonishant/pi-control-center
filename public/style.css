@@ -244,10 +244,41 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 24px;
   backdrop-filter: var(--backdrop-blur);
   background: var(--bg-glass);
   z-index: 5;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.menu-toggle-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  color: var(--color-teal);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.menu-toggle-btn:hover {
+  background: var(--color-teal-glow);
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(0, 242, 195, 0.3);
+}
+
+.menu-toggle-btn i {
+  width: 20px;
+  height: 20px;
 }
 
 .header-title h2 {

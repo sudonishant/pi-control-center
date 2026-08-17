@@ -148,6 +148,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const contentViews = document.querySelectorAll('.content-view');
   const pageTitle = document.getElementById('page-title');
 
+  // 3-Dot Menu / Sidebar Toggle Listener
+  const menuToggleBtn = document.getElementById('menu-toggle-btn');
+  const sidebar = document.querySelector('.sidebar');
+
+  if (menuToggleBtn && sidebar) {
+    menuToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('open');
+      } else {
+        sidebar.classList.toggle('collapsed');
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
+        if (!sidebar.contains(e.target) && !menuToggleBtn.contains(e.target)) {
+          sidebar.classList.remove('open');
+        }
+      }
+    });
+
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          sidebar.classList.remove('open');
+        }
+      });
+    });
+  }
+
   // Dashboard Elements
   const cpuVal = document.getElementById('cpu-val');
   const ramVal = document.getElementById('ram-val');
