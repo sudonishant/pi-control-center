@@ -25,26 +25,29 @@ if ('serviceWorker' in navigator) {
 
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize socket.io connection
-  const socket = io();
+  const isFileProtocol = (window.location.protocol === 'file:' || !window.location.hostname);
+  let socket = isFileProtocol ? null : io();
 
-  // State variables
-  let currentSocketId = null;
-  let currentSessionToken = null;
-  let currentDirectory = '/';
-  let term = null;
-  let fitAddon = null;
-  let performanceHistory = []; // store last 30 data points for canvas chart: { cpu, temp }
-  const MAX_HISTORY = 30;
-  let activePiHost = '';
-  let activePiUser = '';
-  let rfbInstance = null;
-  let directRfbInstance = null;
+  function getActiveSocket(targetHost) {
+    if (!socket || (isFileProtocol && targetHost)) {
+      const host = targetHost || localStorage.getItem('last_active_pi_host') || '10.82.32.172';
+      const socketTargetUrl = isFileProtocol ? `http://${host}:3000` : undefined;
+      if (socket) {
+        try { socket.disconnect(); } catch (e) {}
+      }
+      socket = io(socketTargetUrl);
+      registerSocketEvents();
+    }
+    return socket;
+  }
 
   // Cache socket id on connect
-  socket.on('connect', () => {
-    currentSocketId = socket.id;
-    console.log('Connected to local backend. Socket ID:', currentSocketId);
-  });
+  if (socket) {
+    socket.on('connect', () => {
+      currentSocketId = socket.id;
+      console.log('Connected to backend. Socket ID:', currentSocketId);
+    });
+  }
 
   // DOM Elements
   const connectionModal = document.getElementById('connection-modal');
@@ -214,9 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const passphrase = document.getElementById('ssh-passphrase').value;
 
     const connectionData = { host, port, username, authType, password, privateKey, passphrase };
+    localStorage.setItem('last_active_pi_host', host);
 
-    // Emit connection request
-    socket.emit('ssh-connect', connectionData);
+    // Emit connection request via active socket
+    const activeSocket = getActiveSocket(host);
+    activeSocket.emit('ssh-connect', connectionData);
 
     // Save profile if checked
     const saveProfileChecked = document.getElementById('save-profile').checked;

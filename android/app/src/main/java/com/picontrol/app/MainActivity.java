@@ -77,12 +77,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Auto load saved URL if exists
-        String savedUrl = sharedPreferences.getString(KEY_SERVER_URL, "");
-        if (!savedUrl.isEmpty()) {
-            ipInput.setText(savedUrl);
-            loadServerUrl(savedUrl);
-        }
+        // Auto load native embedded web app assets by default
+        String savedUrl = sharedPreferences.getString(KEY_SERVER_URL, "file:///android_asset/www/index.html");
+        loadServerUrl(savedUrl);
     }
 
     private String formatServerUrl(String raw) {
