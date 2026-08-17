@@ -1,10 +1,19 @@
 package com.picontrol.app;
 
+import android.app.DownloadManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.View;
+import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -26,6 +35,9 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private SharedPreferences sharedPreferences;
 
+    private ValueCallback<Uri[]> uploadMessage;
+    private final static int FILECHOOSER_RESULTCODE = 1001;
+
     private static final String PREFS_NAME = "PiControlPrefs";
     private static final String KEY_SERVER_URL = "server_url";
 
@@ -43,27 +55,25 @@ public class MainActivity extends AppCompatActivity {
 
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-        // Setup WebView parameters
+        // Setup WebView parameters & WebChromeClient
         configureWebView();
 
         // Connect button handler
         connectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String url = ipInput.getText().toString().trim();
-                if (url.isEmpty()) {
-                    Toast.makeText(MainActivity.this, "Please enter a valid URL", Toast.LENGTH_SHORT).show();
+                String input = ipInput.getText().toString().trim();
+                if (input.isEmpty()) {
+                    Toast.makeText(MainActivity.this, "Please enter a valid IP address or URL", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
-                // Add protocol prefix if missing
-                if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                    url = "http://" + url;
-                }
+                String formattedUrl = formatServerUrl(input);
+                ipInput.setText(formattedUrl);
 
                 // Save URL and load
-                sharedPreferences.edit().putString(KEY_SERVER_URL, url).apply();
-                loadServerUrl(url);
+                sharedPreferences.edit().putString(KEY_SERVER_URL, formattedUrl).apply();
+                loadServerUrl(formattedUrl);
             }
         });
 
@@ -75,6 +85,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private String formatServerUrl(String raw) {
+        String url = raw.trim();
+        // Add protocol prefix if missing
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            url = "http://" + url;
+        }
+        // Auto append default port 3000 if no port specified
+        try {
+            Uri uri = Uri.parse(url);
+            if (uri.getPort() == -1 && !url.contains(":3000")) {
+                url = url + ":3000";
+            }
+        } catch (Exception ignored) {}
+
+        return url;
+    }
+
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -84,8 +111,47 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
 
-        // Prevent links from opening in external default browser
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        }
+
+        // WebChromeClient for File Uploads & Progress
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (newProgress < 100) {
+                    progressBar.setVisibility(View.VISIBLE);
+                } else {
+                    progressBar.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (uploadMessage != null) {
+                    uploadMessage.onReceiveValue(null);
+                    uploadMessage = null;
+                }
+
+                uploadMessage = filePathCallback;
+                Intent intent = fileChooserParams.createIntent();
+                try {
+                    startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+                } catch (Exception e) {
+                    uploadMessage = null;
+                    Toast.makeText(MainActivity.this, "Cannot open file picker", Toast.LENGTH_LONG).show();
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        // WebViewClient for navigation
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -101,13 +167,59 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                // Handle failures (e.g. host server is offline)
                 progressBar.setVisibility(View.GONE);
                 webView.setVisibility(View.GONE);
                 setupLayout.setVisibility(View.VISIBLE);
-                Toast.makeText(MainActivity.this, "Failed connecting to server. Is it online?", Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this, "Failed connecting to PiControl server. Check IP & connection.", Toast.LENGTH_LONG).show();
             }
         });
+
+        // DownloadListener for file downloads from SFTP Manager
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimeType, long contentLength) {
+                try {
+                    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                    request.setMimeType(mimeType);
+                    String cookies = CookieManager.getInstance().getCookie(url);
+                    request.addRequestHeader("cookie", cookies);
+                    request.addRequestHeader("User-Agent", userAgent);
+                    request.setDescription("Downloading file from Raspberry Pi...");
+                    request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType));
+                    request.allowScanningByMediaScanner();
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimeType));
+
+                    DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.enqueue(request);
+                        Toast.makeText(getApplicationContext(), "Downloading File...", Toast.LENGTH_LONG).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    private static class URLUtil {
+        public static String guessFileName(String url, String contentDisposition, String mimeType) {
+            String filename = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType);
+            if (filename == null || filename.isEmpty()) {
+                filename = "pi_file_download";
+            }
+            return filename;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILECHOOSER_RESULTCODE) {
+            if (uploadMessage == null) return;
+            uploadMessage.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            uploadMessage = null;
+        }
     }
 
     private void loadServerUrl(String url) {
@@ -121,13 +233,13 @@ public class MainActivity extends AppCompatActivity {
             if (webView.canGoBack()) {
                 webView.goBack();
             } else {
-                // If on home view of dashboard, back button returns to the server selection configuration
                 webView.setVisibility(View.GONE);
                 setupLayout.setVisibility(View.VISIBLE);
-                Toast.makeText(this, "Disconnected from dashboard. You can modify server IP.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Disconnected from dashboard. You can enter a new server IP.", Toast.LENGTH_SHORT).show();
             }
         } else {
             super.onBackPressed();
         }
     }
 }
+

@@ -9,6 +9,7 @@
         android:id="@+id/webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="#0B0F19"
         android:visibility="gone" />
 
     <!-- Setup IP Input Screen -->
@@ -21,45 +22,69 @@
         android:padding="24dp"
         android:visibility="visible">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Glassmorphism Container Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PiControl Android"
-            android:textColor="#00F2C3"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Enter the IP &amp; Port of the running PiControl server"
-            android:textColor="#94A3B8"
-            android:textSize="14sp"
+            android:orientation="vertical"
             android:gravity="center"
-            android:layout_marginBottom="32dp" />
+            android:padding="28dp"
+            android:background="@drawable/card_bg"
+            android:elevation="8dp">
 
-        <EditText
-            android:id="@+id/ip_input"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="http://192.168.1.100:3000"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#64748B"
-            android:inputType="textUri"
-            android:padding="16dp"
-            android:background="@android:drawable/editbox_background_normal"
-            android:layout_marginBottom="20dp" />
+            <!-- Small Neon SVG CPU Logo -->
+            <ImageView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:src="@drawable/ic_logo_chip"
+                android:contentDescription="PiControl Logo"
+                android:layout_marginBottom="16dp" />
 
-        <Button
-            android:id="@+id/connect_btn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Connect"
-            android:backgroundTint="#00F2C3"
-            android:textColor="#0B0F19"
-            android:padding="16dp"
-            android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PiControl Android"
+                android:textColor="#00F2C3"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.02"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Enter the IP &amp; Port of your PiControl server"
+                android:textColor="#94A3B8"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:layout_marginBottom="28dp" />
+
+            <EditText
+                android:id="@+id/ip_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="e.g. 10.82.32.172 or 192.168.1.100:3000"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#64748B"
+                android:inputType="textUri"
+                android:padding="16dp"
+                android:textSize="14sp"
+                android:background="@drawable/input_bg"
+                android:layout_marginBottom="20dp" />
+
+            <Button
+                android:id="@+id/connect_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Connect to Dashboard"
+                android:background="@drawable/button_bg"
+                android:textColor="#0B0F19"
+                android:padding="16dp"
+                android:textSize="15sp"
+                android:textAllCaps="false"
+                android:textStyle="bold" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
