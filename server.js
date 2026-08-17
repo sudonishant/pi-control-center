@@ -373,13 +373,60 @@ app.post('/api/phone/rename', (req, res) => {
 });
 
 
+// In-Memory Cloud Relay Registration Map for Vercel
+const activeDevicesMap = new Map();
+
 // Socket.io Handlers
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
 
+  // 1. Phone Agent Registration (Outbound connection from Android App)
+  socket.on('register-phone-agent', (data) => {
+    const deviceId = data.deviceId || 'default-phone';
+    const pairingToken = data.token || DEVICE_PAIRING_TOKEN;
+    
+    activeDevicesMap.set(deviceId, {
+      socketId: socket.id,
+      token: pairingToken,
+      deviceName: data.deviceName || 'Android Device',
+      lastSeen: Date.now()
+    });
+
+    socket.deviceId = deviceId;
+    socket.join(`room_${deviceId}`);
+    console.log(`Phone agent registered on Cloud Relay: ${deviceId} (${socket.id})`);
+    
+    socket.emit('phone-agent-registered', { success: true, deviceId, room: `room_${deviceId}` });
+    io.to(`room_${deviceId}`).emit('device-status-change', { online: true, deviceId });
+  });
+
+  // 2. Vercel Web Dashboard Connection Handshake
+  socket.on('connect-to-phone', (data) => {
+    const deviceId = data.deviceId || 'default-phone';
+    socket.join(`room_${deviceId}`);
+    console.log(`Vercel Web Client connected to device room: room_${deviceId}`);
+    
+    const device = activeDevicesMap.get(deviceId);
+    socket.emit('phone-connection-result', {
+      connected: !!device,
+      deviceId,
+      deviceName: device ? device.deviceName : 'Offline Phone'
+    });
+  });
+
+  // 3. Relay Socket Control Events to Room
+  socket.on('relay-event', ({ deviceId, eventName, payload }) => {
+    const targetRoom = `room_${deviceId || socket.deviceId || 'default-phone'}`;
+    socket.to(targetRoom).emit(eventName, payload);
+  });
+
   // Real-time Phone Camera Streaming & Control WebSockets
   socket.on('camera-stream-frame', (data) => {
-    socket.broadcast.emit('camera-frame', data);
+    if (socket.deviceId) {
+      socket.to(`room_${socket.deviceId}`).emit('camera-frame', data);
+    } else {
+      socket.broadcast.emit('camera-frame', data);
+    }
   });
 
   socket.on('camera-snapshot-trigger', (options) => {

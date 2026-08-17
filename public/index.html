@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PiControl - Raspberry Pi SSH Command Center</title>
+  <title>PhoneControl - Remote Mobile & File Hub</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -183,9 +183,14 @@
                   </button>
                 </div>
               </div>
-              <div class="pairing-pin-display mt-3" style="display: flex; gap: 12px; align-items: center;">
-                <span class="sub-text">Security Pairing PIN:</span>
-                <strong id="device-pin-display" style="font-size: 1.2rem; font-family: var(--font-mono); color: var(--neon-teal); letter-spacing: 2px;">384912</strong>
+              <div class="pairing-pin-display mt-3" style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <span class="sub-text">Security Pairing PIN:</span>
+                  <strong id="device-pin-display" style="font-size: 1.2rem; font-family: var(--font-mono); color: var(--neon-teal); letter-spacing: 2px;">384912</strong>
+                </div>
+                <button class="btn btn-secondary" onclick="window.setVercelDeviceId()" title="Pair Device ID for Vercel">
+                  <i data-lucide="key"></i> Pair Vercel Device ID
+                </button>
               </div>
             </div>
           </div>

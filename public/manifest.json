@@ -1,7 +1,7 @@
 {
-  "name": "PiControl - Raspberry Pi Command Center",
-  "short_name": "PiControl",
-  "description": "Establish SSH and SFTP connections to control and monitor Raspberry Pi devices.",
+  "name": "PhoneControl - Remote Mobile & File Hub",
+  "short_name": "PhoneControl",
+  "description": "Remote control your phone, manage files, and stream camera over Wi-Fi & Internet.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0B0F19",

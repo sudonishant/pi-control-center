@@ -2217,9 +2217,43 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localWifiIp) localWifiIp.innerText = hostStr;
   }
 
+  // -------------------------------------------------------------
+  // VERCEL CLOUD RELAY HANDSHAKE LOGIC
+  // -------------------------------------------------------------
+  let activeDeviceId = localStorage.getItem('vercel_device_id') || 'default-phone';
+
+  function initVercelCloudHandshake() {
+    const isVercelHost = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.dev');
+    const badge = document.getElementById('global-status-badge');
+    
+    if (isVercelHost) {
+      if (badge) {
+        badge.innerText = 'Vercel Cloud Active';
+        badge.style.background = 'rgba(0, 242, 195, 0.2)';
+      }
+      console.log('Running on Vercel Cloud App. Paired Device ID:', activeDeviceId);
+      if (socket) {
+        socket.emit('connect-to-phone', { deviceId: activeDeviceId });
+      }
+    }
+  }
+
+  window.setVercelDeviceId = async function() {
+    const newId = await customPrompt('Enter your Phone Device ID / Secret Pairing Key:', activeDeviceId);
+    if (newId) {
+      activeDeviceId = newId.trim();
+      localStorage.setItem('vercel_device_id', activeDeviceId);
+      if (socket) {
+        socket.emit('connect-to-phone', { deviceId: activeDeviceId });
+      }
+      alert(`Device ID updated to "${activeDeviceId}". Connecting Vercel dashboard to phone...`);
+    }
+  };
+
   // Load initial phone files & remote info
   fetchPhoneFiles('/');
   fetchRemoteInfo();
+  initVercelCloudHandshake();
 
   // Initialize listeners
   setupRemoteKeyListeners();
