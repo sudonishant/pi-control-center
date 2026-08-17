@@ -27,6 +27,64 @@ document.addEventListener('DOMContentLoaded', () => {
   let socket = isFileProtocol ? null : io();
   let pendingConnectData = null;
 
+  function attachAllSocketListeners(s) {
+    if (!s) return;
+    s.off('connect');
+    s.off('ssh-connected');
+    s.off('ssh-error');
+    s.off('ssh-disconnected');
+
+    s.on('connect', () => {
+      currentSocketId = s.id;
+      console.log('Socket connected successfully. ID:', currentSocketId);
+    });
+
+    s.on('ssh-connected', (info) => {
+      console.log('Successfully connected to SSH:', info);
+      activePiHost = info.host;
+      activePiUser = info.username;
+      currentSessionToken = info.sessionToken;
+
+      connectionModal.style.opacity = '0';
+      setTimeout(() => {
+        connectionModal.style.display = 'none';
+      }, 400);
+
+      statusIndicator.className = 'status-indicator connected';
+      statusText.innerText = 'Connected';
+      hostUser.innerText = info.username;
+      hostIp.innerText = info.host;
+      hostDetails.style.display = 'block';
+      disconnectBtn.style.display = 'flex';
+      powerActionsGroup.style.display = 'flex';
+      uptimeDisplay.style.display = 'flex';
+
+      initTerminal();
+      s.emit('sftp-list', currentDirectory);
+      s.emit('get-processes');
+    });
+
+    s.on('ssh-error', (msg) => {
+      console.error('SSH connection failed:', msg);
+      errorBanner.style.display = 'flex';
+      errorMessage.innerText = msg;
+      connectSubmitBtn.disabled = false;
+      connectSubmitBtn.innerHTML = '<i data-lucide="link-2"></i> Establish Secure Connection';
+      lucide.createIcons();
+
+      statusIndicator.className = 'status-indicator disconnected';
+      statusText.innerText = 'Error';
+    });
+
+    s.on('ssh-disconnected', () => {
+      console.log('SSH connection disconnected');
+      statusIndicator.className = 'status-indicator disconnected';
+      statusText.innerText = 'Disconnected';
+      hostDetails.style.display = 'none';
+      disconnectBtn.style.display = 'none';
+    });
+  }
+
   function getActiveSocket(targetHost) {
     if (!socket || (isFileProtocol && targetHost)) {
       const host = targetHost || localStorage.getItem('last_active_pi_host') || '10.82.32.172';
@@ -38,20 +96,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       console.log('Initializing socket targeting:', primaryUrl || 'origin');
-      socket = io(primaryUrl);
+      socket = io(primaryUrl, { reconnectionAttempts: 2, timeout: 3000 });
+      attachAllSocketListeners(socket);
 
       if (isFileProtocol) {
         socket.on('connect_error', (err) => {
-          console.warn('Primary bridge URL unreachable. Attempting ADB localhost bridge:', fallbackUrl);
+          console.warn('Primary bridge URL unreachable. Attempting ADB bridge:', fallbackUrl);
           if (socket && socket.io && socket.io.uri !== fallbackUrl) {
-            socket.disconnect();
-            socket = io(fallbackUrl);
+            try { socket.disconnect(); } catch (e) {}
+            socket = io(fallbackUrl, { reconnectionAttempts: 5, timeout: 5000 });
+            attachAllSocketListeners(socket);
             if (pendingConnectData) {
               socket.emit('ssh-connect', pendingConnectData);
             }
+          } else {
+            connectSubmitBtn.disabled = false;
+            connectSubmitBtn.innerHTML = '<i data-lucide="link-2"></i> Establish Secure Connection';
+            lucide.createIcons();
+            errorBanner.style.display = 'flex';
+            errorMessage.innerText = 'Cannot connect to PiControl server. Make sure server.js is running.';
           }
         });
       }
+    } else {
+      attachAllSocketListeners(socket);
     }
     return socket;
   }
