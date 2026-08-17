@@ -25,26 +25,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize socket.io connection
   const isFileProtocol = (window.location.protocol === 'file:' || !window.location.hostname);
   let socket = isFileProtocol ? null : io();
+  let pendingConnectData = null;
 
   function getActiveSocket(targetHost) {
     if (!socket || (isFileProtocol && targetHost)) {
       const host = targetHost || localStorage.getItem('last_active_pi_host') || '10.82.32.172';
-      const socketTargetUrl = isFileProtocol ? `http://${host}:3000` : undefined;
+      const primaryUrl = isFileProtocol ? `http://${host}:3000` : undefined;
+      const fallbackUrl = `http://localhost:3000`;
+
       if (socket) {
         try { socket.disconnect(); } catch (e) {}
       }
-      socket = io(socketTargetUrl);
-      registerSocketEvents();
+
+      console.log('Initializing socket targeting:', primaryUrl || 'origin');
+      socket = io(primaryUrl);
+
+      if (isFileProtocol) {
+        socket.on('connect_error', (err) => {
+          console.warn('Primary bridge URL unreachable. Attempting ADB localhost bridge:', fallbackUrl);
+          if (socket && socket.io && socket.io.uri !== fallbackUrl) {
+            socket.disconnect();
+            socket = io(fallbackUrl);
+            if (pendingConnectData) {
+              socket.emit('ssh-connect', pendingConnectData);
+            }
+          }
+        });
+      }
     }
     return socket;
-  }
-
-  // Cache socket id on connect
-  if (socket) {
-    socket.on('connect', () => {
-      currentSocketId = socket.id;
-      console.log('Connected to backend. Socket ID:', currentSocketId);
-    });
   }
 
   // DOM Elements
@@ -215,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const passphrase = document.getElementById('ssh-passphrase').value;
 
     const connectionData = { host, port, username, authType, password, privateKey, passphrase };
+    pendingConnectData = connectionData;
     localStorage.setItem('last_active_pi_host', host);
 
     // Emit connection request via active socket
