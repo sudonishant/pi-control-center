@@ -70,30 +70,38 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo">
-          <i data-lucide="cpu" class="neon-glow-icon"></i>
+          <i data-lucide="smartphone" class="neon-glow-icon"></i>
         </div>
         <div class="brand-info">
-          <h1>PiControl</h1>
-          <span class="sub-text">Raspberry Pi Panel</span>
+          <h1>Wi-Fi Control</h1>
+          <span class="sub-text">Phone Remote & File Hub</span>
         </div>
       </div>
 
       <nav class="nav-menu">
-        <a href="#dashboard" class="nav-item active" id="nav-dashboard">
+        <a href="#phone" class="nav-item active" id="nav-phone">
+          <i data-lucide="smartphone"></i>
+          <span>Phone Control</span>
+        </a>
+        <a href="#files" class="nav-item" id="nav-files">
+          <i data-lucide="folder-open"></i>
+          <span>Wi-Fi Files</span>
+        </a>
+        <a href="#camera" class="nav-item" id="nav-camera">
+          <i data-lucide="camera"></i>
+          <span>Wi-Fi Camera</span>
+        </a>
+        <a href="#tools" class="nav-item" id="nav-tools">
+          <i data-lucide="sliders"></i>
+          <span>Clipboard & Tools</span>
+        </a>
+        <a href="#dashboard" class="nav-item" id="nav-dashboard">
           <i data-lucide="layout-dashboard"></i>
-          <span>Dashboard</span>
+          <span>Pi Dashboard</span>
         </a>
         <a href="#terminal" class="nav-item" id="nav-terminal">
           <i data-lucide="terminal"></i>
           <span>Terminal</span>
-        </a>
-        <a href="#files" class="nav-item" id="nav-files">
-          <i data-lucide="folder-open"></i>
-          <span>File Manager</span>
-        </a>
-        <a href="#processes" class="nav-item" id="nav-processes">
-          <i data-lucide="activity"></i>
-          <span>Processes</span>
         </a>
         <a href="#vnc" class="nav-item" id="nav-vnc">
           <i data-lucide="monitor"></i>
@@ -102,17 +110,14 @@
       </nav>
 
       <div class="connection-status-panel">
-        <div class="status-indicator disconnected">
+        <div class="status-indicator connected" id="wifi-status-badge">
           <span class="status-dot"></span>
-          <span class="status-text">Disconnected</span>
+          <span class="status-text" id="wifi-status-text">Wi-Fi Connected</span>
         </div>
-        <div class="host-details" style="display: none;">
-          <p class="host-user">pi</p>
-          <p class="host-ip">192.168.1.100</p>
+        <div class="host-details">
+          <p class="host-user">Local Device</p>
+          <p class="host-ip" id="local-wifi-ip">Wi-Fi Ready</p>
         </div>
-        <button id="disconnect-btn" class="btn btn-danger" style="display: none;">
-          <i data-lucide="log-out"></i> Disconnect
-        </button>
       </div>
     </aside>
 
@@ -126,12 +131,12 @@
             <i data-lucide="more-vertical"></i>
           </button>
           <div class="header-title">
-            <h2 id="page-title">Dashboard</h2>
+            <h2 id="page-title">Phone Control Hub</h2>
           </div>
         </div>
         <div class="header-actions">
-          <div class="uptime-display" id="uptime-display" style="display: none;">
-            <i data-lucide="clock"></i> <span id="uptime-val">uptime...</span>
+          <div class="uptime-display" id="uptime-display">
+            <i data-lucide="wifi"></i> <span id="wifi-network-name">Local Wi-Fi Network</span>
           </div>
           <button id="theme-toggle-btn" class="icon-btn" title="Toggle Theme">
             <i data-lucide="sun"></i>
@@ -142,8 +147,135 @@
       <!-- View Containers -->
       <div class="view-container">
 
-        <!-- 1. DASHBOARD VIEW -->
-        <section id="view-dashboard" class="content-view active">
+        <!-- 0. PHONE CONTROL HUB VIEW (DEFAULT) -->
+        <section id="view-phone" class="content-view active">
+          <!-- Quick Alert / Setup Tip -->
+          <div class="welcome-banner">
+            <div class="welcome-text">
+              <h3><i data-lucide="wifi" class="neon-glow-icon"></i> Wi-Fi Phone Remote Control</h3>
+              <p>Manage all files, stream camera live, and access phone tools over local Wi-Fi without cables.</p>
+            </div>
+            <div class="system-power-actions">
+              <button class="btn btn-primary" id="btn-quick-upload-trigger">
+                <i data-lucide="upload-cloud"></i> Upload Files
+              </button>
+              <button class="btn btn-secondary" id="btn-open-cam-trigger">
+                <i data-lucide="camera"></i> View Camera
+              </button>
+          </div>
+
+          <!-- Global Internet Remote Access Card -->
+          <div class="glass-panel global-remote-panel mb-4">
+            <div class="panel-header">
+              <h3><i data-lucide="globe" class="neon-glow-icon"></i> Anywhere Internet Remote Access</h3>
+              <span class="status-badge-large" style="font-size: 0.85rem; padding: 4px 12px;" id="global-status-badge">Global WAN Active</span>
+            </div>
+            <div class="panel-body">
+              <p class="sub-text mb-3">Access and control your phone from anywhere in the world over 4G/5G or remote Wi-Fi.</p>
+              <div class="form-row align-center">
+                <div class="form-group col-9">
+                  <label for="global-url-input">Permanent Remote Web Dashboard Link</label>
+                  <input type="text" id="global-url-input" readonly value="http://127.0.0.1:3000" class="clipboard-input">
+                </div>
+                <div class="form-group col-3 align-self-end">
+                  <button class="btn btn-primary btn-block" id="btn-copy-global-link">
+                    <i data-lucide="copy"></i> Copy Link
+                  </button>
+                </div>
+              </div>
+              <div class="pairing-pin-display mt-3" style="display: flex; gap: 12px; align-items: center;">
+                <span class="sub-text">Security Pairing PIN:</span>
+                <strong id="device-pin-display" style="font-size: 1.2rem; font-family: var(--font-mono); color: var(--neon-teal); letter-spacing: 2px;">384912</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Buttons Row -->
+          <div class="quick-actions-bar glass-panel mb-4">
+            <h4 class="section-title"><i data-lucide="zap"></i> Quick Remote Actions</h4>
+            <div class="action-buttons-grid">
+              <button class="action-card" id="quick-btn-flashlight">
+                <i data-lucide="zap" class="action-icon"></i>
+                <span>Toggle Flashlight</span>
+              </button>
+              <button class="action-card" id="quick-btn-alarm">
+                <i data-lucide="bell" class="action-icon"></i>
+                <span>Find Phone (Alarm)</span>
+              </button>
+              <button class="action-card" id="quick-btn-vibrate">
+                <i data-lucide="vibrate" class="action-icon"></i>
+                <span>Vibrate Device</span>
+              </button>
+              <button class="action-card" id="quick-btn-clipboard">
+                <i data-lucide="copy" class="action-icon"></i>
+                <span>Clipboard Sync</span>
+              </button>
+              <button class="action-card" id="quick-btn-snapshot">
+                <i data-lucide="aperture" class="action-icon"></i>
+                <span>Take Snapshot</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Phone Metrics Grid -->
+          <div class="metrics-grid">
+            <!-- Battery Metric Card -->
+            <div class="metric-card card-glow-teal">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="battery-charging"></i></div>
+                <div class="card-title-group">
+                  <h4>Phone Battery</h4>
+                  <span class="card-subtitle" id="battery-status-text">Charging via Wi-Fi Hub</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-cpu" id="battery-ring" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="50" />
+                  </svg>
+                  <div class="radial-value" id="phone-battery-val">85%</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Phone Storage Card -->
+            <div class="metric-card card-glow-cyan">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="hard-drive"></i></div>
+                <div class="card-title-group">
+                  <h4>Internal Storage</h4>
+                  <span class="card-subtitle">DCIM, Downloads & Files</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 100 100">
+                    <circle class="bg" cx="50" cy="50" r="40" />
+                    <circle class="fg progress-disk" id="storage-ring" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="100" />
+                  </svg>
+                  <div class="radial-value" id="phone-storage-val">60%</div>
+                </div>
+                <div class="metric-info-detail" id="phone-storage-details">38 GB Free / 64 GB</div>
+              </div>
+            </div>
+
+            <!-- Wi-Fi Network Info Card -->
+            <div class="metric-card card-glow-purple">
+              <div class="card-header">
+                <div class="card-icon"><i data-lucide="wifi"></i></div>
+                <div class="card-title-group">
+                  <h4>Wi-Fi Connection</h4>
+                  <span class="card-subtitle">High-speed LAN link</span>
+                </div>
+              </div>
+              <div class="card-body flex-column align-center justify-center">
+                <div class="status-badge-large" id="wifi-ip-display">IP: Auto-detected</div>
+                <p class="sub-text mt-2">Zero mobile data used</p>
+              </div>
+            </div>
+          </div>
+        </section>
           <!-- Quick Alert / Setup Tip -->
           <div class="welcome-banner">
             <div class="welcome-text">
@@ -348,6 +480,85 @@
           </div>
         </section>
 
+        <!-- WI-FI CAMERA VIEW -->
+        <section id="view-camera" class="content-view">
+          <div class="glass-panel camera-panel">
+            <div class="panel-header">
+              <h3><i data-lucide="camera" class="neon-glow-icon"></i> Live Wi-Fi Camera Feed</h3>
+              <div class="camera-actions-bar">
+                <button id="cam-switch-btn" class="btn btn-secondary">
+                  <i data-lucide="refresh-cw"></i> Switch Front/Rear
+                </button>
+                <button id="cam-torch-btn" class="btn btn-warning">
+                  <i data-lucide="zap"></i> Flashlight
+                </button>
+                <button id="cam-snapshot-btn" class="btn btn-success">
+                  <i data-lucide="aperture"></i> Capture Snapshot
+                </button>
+              </div>
+            </div>
+            <div class="panel-body camera-feed-container">
+              <video id="camera-video-player" autoplay playsinline muted class="camera-stream-video"></video>
+              <canvas id="camera-snapshot-canvas" style="display: none;"></canvas>
+              <div class="camera-overlay-controls" id="camera-status-overlay">
+                <i data-lucide="video" class="logo-large mb-2"></i>
+                <p id="cam-status-text">Click "Start Live Feed" to connect to camera over Wi-Fi</p>
+                <button id="cam-toggle-feed-btn" class="btn btn-primary mt-3">
+                  <i data-lucide="play"></i> Start Live Feed
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CLIPBOARD & TOOLS VIEW -->
+        <section id="view-tools" class="content-view">
+          <div class="tools-grid">
+            <!-- Clipboard Card -->
+            <div class="glass-panel tool-card">
+              <div class="panel-header">
+                <h3><i data-lucide="copy" class="neon-glow-icon"></i> Clipboard Sync</h3>
+              </div>
+              <div class="panel-body">
+                <p class="sub-text mb-2">Copy text on PC and send to phone clipboard instantly.</p>
+                <textarea id="clipboard-text-area" rows="6" class="clipboard-input" placeholder="Type or paste text here to sync over Wi-Fi..."></textarea>
+                <div class="tool-btn-group mt-3">
+                  <button id="btn-send-clipboard" class="btn btn-primary">
+                    <i data-lucide="send"></i> Send to Phone
+                  </button>
+                  <button id="btn-get-clipboard" class="btn btn-secondary">
+                    <i data-lucide="download"></i> Read Phone Clipboard
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Phone Alert & Locator Card -->
+            <div class="glass-panel tool-card">
+              <div class="panel-header">
+                <h3><i data-lucide="bell" class="neon-glow-icon"></i> Phone Alert & Locator</h3>
+              </div>
+              <div class="panel-body">
+                <div class="tool-item mb-4">
+                  <h4><i data-lucide="volume-2"></i> Play Loud Alarm</h4>
+                  <p class="sub-text">Ring phone at full volume to locate it under cushions or in another room.</p>
+                  <button id="btn-trigger-alarm" class="btn btn-danger mt-2">
+                    <i data-lucide="bell-ring"></i> Ring Phone Now
+                  </button>
+                </div>
+                <div class="tool-item">
+                  <h4><i data-lucide="vibrate"></i> Vibrate Device</h4>
+                  <p class="sub-text">Send haptic feedback pulse to phone.</p>
+                  <button id="btn-trigger-vibrate" class="btn btn-warning mt-2">
+                    <i data-lucide="vibrate"></i> Trigger Vibration
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
         <!-- 4. PROCESSES VIEW -->
         <section id="view-processes" class="content-view">
           <div class="glass-panel process-panel">
@@ -546,6 +757,19 @@
             <p>No saved profiles yet</p>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEDIA PREVIEW MODAL -->
+  <div class="custom-dialog-overlay" id="media-modal" style="display: none;">
+    <div class="glass-panel media-modal-card">
+      <div class="dialog-header">
+        <h3 id="media-modal-title"><i data-lucide="file"></i> Media Preview</h3>
+        <button id="media-modal-close" class="icon-btn"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialog-body media-modal-body" id="media-modal-content">
+        <!-- Dynamic preview content -->
       </div>
     </div>
   </div>

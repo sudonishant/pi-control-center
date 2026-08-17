@@ -1485,6 +1485,187 @@ body.vnc-fullscreen-active .vnc-panel {
   width: 100vw !important;
   padding: 10px !important;
 }
+/* -------------------------------------------------------------
+   WI-FI PHONE CONTROL HUB STYLES
+   ------------------------------------------------------------- */
 
+/* Quick Actions Section */
+.quick-actions-bar {
+  padding: 20px;
+  margin-bottom: 24px;
+}
 
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.action-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--border-radius-md);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.action-card:hover {
+  background: rgba(0, 242, 195, 0.08);
+  border-color: rgba(0, 242, 195, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 242, 195, 0.15);
+}
+
+.action-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--neon-teal);
+}
+
+.status-badge-large {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--neon-teal);
+  padding: 10px 20px;
+  background: rgba(0, 242, 195, 0.08);
+  border: 1px solid rgba(0, 242, 195, 0.25);
+  border-radius: 30px;
+}
+
+/* Wi-Fi Camera Panel */
+.camera-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+
+.camera-actions-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.camera-feed-container {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  background: #000;
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-stream-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.camera-overlay-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 20px;
+}
+
+/* Tools Grid */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.tool-card {
+  padding: 24px;
+}
+
+.clipboard-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--border-radius-sm);
+  padding: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.clipboard-input:focus {
+  outline: none;
+  border-color: var(--neon-teal);
+}
+
+.tool-btn-group {
+  display: flex;
+  gap: 12px;
+}
+
+/* Media Preview Modal */
+.media-modal-card {
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.media-modal-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+  min-height: 250px;
+}
+
+.media-modal-body img,
+.media-modal-body video {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--border-radius-sm);
+  object-fit: contain;
+}
+
+.media-modal-body pre {
+  width: 100%;
+  max-height: 60vh;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--neon-teal);
+}
 

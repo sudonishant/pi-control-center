@@ -1695,6 +1695,533 @@ document.addEventListener('DOMContentLoaded', () => {
     return showCustomDialog({ title, message, type: 'prompt', inputType, defaultValue });
   };
 
+  // -------------------------------------------------------------
+  // WI-FI PHONE CONTROL & FILE MANAGER LOGIC
+  // -------------------------------------------------------------
+
+  let currentPhoneDirectory = '/';
+
+  // Helper for escape HTML
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Get file icon based on extension
+  function getFileIcon(ext) {
+    if (!ext) return 'file';
+    const e = ext.replace('.', '').toLowerCase();
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(e)) return 'image';
+    if (['mp4', 'webm', 'mov', 'mkv', 'avi'].includes(e)) return 'video';
+    if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(e)) return 'music';
+    if (['zip', 'tar', 'gz', '7z', 'rar'].includes(e)) return 'archive';
+    if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(e)) return 'file-text';
+    if (['js', 'json', 'html', 'css', 'py', 'java', 'cpp'].includes(e)) return 'code';
+    return 'file';
+  }
+
+  // 1. Fetch & Render Phone Files
+  async function fetchPhoneFiles(reqPath = '/') {
+    try {
+      const res = await fetch(`/api/phone/files?path=${encodeURIComponent(reqPath)}`);
+      if (!res.ok) throw new Error('Failed to fetch files');
+      const data = await res.json();
+      currentPhoneDirectory = data.currentPath;
+      renderPhoneFiles(data.files, data.currentPath);
+    } catch (err) {
+      console.error('Error fetching phone files:', err);
+    }
+  }
+
+  function renderPhoneFiles(files, currentPathStr) {
+    if (filePathInput) filePathInput.value = currentPathStr;
+    if (!fileListBody) return;
+
+    if (!files || files.length === 0) {
+      fileListBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="empty-table">
+            <div class="empty-state">
+              <i data-lucide="folder-open"></i>
+              <p>Folder is empty</p>
+            </div>
+          </td>
+        </tr>
+      `;
+      lucide.createIcons();
+      return;
+    }
+
+    fileListBody.innerHTML = files.map(file => {
+      const iconName = file.isDir ? 'folder' : getFileIcon(file.ext);
+      return `
+        <tr>
+          <td>
+            <div class="file-name-cell ${file.isDir ? 'dir-item' : 'file-item'}" data-path="${escapeHtml(file.path)}" data-isdir="${file.isDir}">
+              <i data-lucide="${iconName}"></i>
+              <span>${escapeHtml(file.name)}</span>
+            </div>
+          </td>
+          <td>${file.isDir ? '--' : file.sizeFormatted}</td>
+          <td>${new Date(file.mtime).toLocaleString()}</td>
+          <td>rw-r--r--</td>
+          <td>
+            <div class="file-action-buttons">
+              ${!file.isDir ? `<button class="btn btn-secondary btn-icon-only btn-preview-file" data-path="${escapeHtml(file.path)}" title="Preview"><i data-lucide="eye"></i></button>` : ''}
+              ${!file.isDir ? `<a href="/api/phone/download?path=${encodeURIComponent(file.path)}" class="btn btn-secondary btn-icon-only" title="Download" download><i data-lucide="download"></i></a>` : ''}
+              <button class="btn btn-secondary btn-icon-only btn-rename-file" data-path="${escapeHtml(file.path)}" data-name="${escapeHtml(file.name)}" title="Rename"><i data-lucide="edit-2"></i></button>
+              <button class="btn btn-danger btn-icon-only btn-delete-file" data-path="${escapeHtml(file.path)}" title="Delete"><i data-lucide="trash-2"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    lucide.createIcons();
+    attachPhoneFileEventListeners();
+  }
+
+  function attachPhoneFileEventListeners() {
+    // Click on Directory item to navigate
+    document.querySelectorAll('.dir-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const dirPath = el.getAttribute('data-path');
+        fetchPhoneFiles(dirPath);
+      });
+    });
+
+    // Preview File
+    document.querySelectorAll('.btn-preview-file').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const filePath = btn.getAttribute('data-path');
+        openMediaPreviewModal(filePath);
+      });
+    });
+
+    // Rename File/Folder
+    document.querySelectorAll('.btn-rename-file').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const oldPath = btn.getAttribute('data-path');
+        const oldName = btn.getAttribute('data-name');
+        const newName = await customPrompt('Enter new name:', oldName);
+        if (newName && newName !== oldName) {
+          try {
+            const res = await fetch('/api/phone/rename', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oldPath, newName })
+            });
+            const data = await res.json();
+            if (data.success) {
+              fetchPhoneFiles(currentPhoneDirectory);
+            } else {
+              alert('Rename failed: ' + data.error);
+            }
+          } catch (err) {
+            alert('Rename error: ' + err.message);
+          }
+        }
+      });
+    });
+
+    // Delete File/Folder
+    document.querySelectorAll('.btn-delete-file').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const pathStr = btn.getAttribute('data-path');
+        if (await customConfirm(`Are you sure you want to delete "${pathStr.split('/').pop()}"?`)) {
+          try {
+            const res = await fetch('/api/phone/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: pathStr })
+            });
+            const data = await res.json();
+            if (data.success) {
+              fetchPhoneFiles(currentPhoneDirectory);
+            } else {
+              alert('Delete failed: ' + data.error);
+            }
+          } catch (err) {
+            alert('Delete error: ' + err.message);
+          }
+        }
+      });
+    });
+  }
+
+  // Upload phone files handler
+  async function uploadPhoneFiles(files) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    formData.append('path', currentPhoneDirectory);
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i]);
+    }
+
+    if (uploadStatusBanner) {
+      uploadStatusBanner.style.display = 'flex';
+      if (uploadStatusText) uploadStatusText.innerText = `Uploading ${files.length} file(s)...`;
+    }
+
+    try {
+      const res = await fetch('/api/phone/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchPhoneFiles(currentPhoneDirectory);
+      } else {
+        alert('Upload failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Upload error: ' + err.message);
+    } finally {
+      if (uploadStatusBanner) uploadStatusBanner.style.display = 'none';
+    }
+  }
+
+  // File Manager toolbar listeners
+  if (fileGoBtn) {
+    fileGoBtn.addEventListener('click', () => {
+      const pathVal = filePathInput ? filePathInput.value.trim() : '/';
+      fetchPhoneFiles(pathVal);
+    });
+  }
+
+  if (fileUpBtn) {
+    fileUpBtn.addEventListener('click', () => {
+      let parts = currentPhoneDirectory.split('/').filter(Boolean);
+      parts.pop();
+      const parentPath = '/' + parts.join('/');
+      fetchPhoneFiles(parentPath);
+    });
+  }
+
+  if (fileRefreshBtn) {
+    fileRefreshBtn.addEventListener('click', () => {
+      fetchPhoneFiles(currentPhoneDirectory);
+    });
+  }
+
+  if (fileNewDirBtn) {
+    fileNewDirBtn.addEventListener('click', async () => {
+      const folderName = await customPrompt('Enter new folder name:');
+      if (folderName) {
+        try {
+          const res = await fetch('/api/phone/mkdir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentPhoneDirectory, folderName })
+          });
+          const data = await res.json();
+          if (data.success) {
+            fetchPhoneFiles(currentPhoneDirectory);
+          } else {
+            alert('Folder creation failed: ' + data.error);
+          }
+        } catch (err) {
+          alert('Folder creation error: ' + err.message);
+        }
+      }
+    });
+  }
+
+  if (fileUploadInput) {
+    fileUploadInput.addEventListener('change', (e) => {
+      uploadPhoneFiles(e.target.files);
+      fileUploadInput.value = '';
+    });
+  }
+
+  // Drag & Drop Upload on File Manager
+  const fileViewSection = document.getElementById('view-files');
+  if (fileViewSection) {
+    fileViewSection.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileViewSection.classList.add('drag-over');
+    });
+    fileViewSection.addEventListener('dragleave', () => {
+      fileViewSection.classList.remove('drag-over');
+    });
+    fileViewSection.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileViewSection.classList.remove('drag-over');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        uploadPhoneFiles(e.dataTransfer.files);
+      }
+    });
+  }
+
+  // Media Preview Modal
+  const mediaModal = document.getElementById('media-modal');
+  const mediaModalClose = document.getElementById('media-modal-close');
+  const mediaModalContent = document.getElementById('media-modal-content');
+  const mediaModalTitle = document.getElementById('media-modal-title');
+
+  function openMediaPreviewModal(filePath) {
+    if (!mediaModal || !mediaModalContent) return;
+
+    const filename = filePath.split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+    const previewUrl = `/api/phone/preview?path=${encodeURIComponent(filePath)}`;
+
+    if (mediaModalTitle) mediaModalTitle.innerHTML = `<i data-lucide="eye"></i> Preview: ${escapeHtml(filename)}`;
+
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+      mediaModalContent.innerHTML = `<img src="${previewUrl}" alt="Preview" />`;
+    } else if (['mp4', 'webm', 'mov', 'mkv'].includes(ext)) {
+      mediaModalContent.innerHTML = `<video src="${previewUrl}" controls autoplay></video>`;
+    } else if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
+      mediaModalContent.innerHTML = `<audio src="${previewUrl}" controls autoplay></audio>`;
+    } else {
+      fetch(previewUrl)
+        .then(r => r.text())
+        .then(text => {
+          mediaModalContent.innerHTML = `<pre>${escapeHtml(text.slice(0, 10000))}</pre>`;
+        })
+        .catch(() => {
+          mediaModalContent.innerHTML = `<p>Preview unavailable for this file format.</p>`;
+        });
+    }
+
+    mediaModal.style.display = 'flex';
+    lucide.createIcons();
+  }
+
+  if (mediaModalClose) {
+    mediaModalClose.addEventListener('click', () => {
+      if (mediaModal) mediaModal.style.display = 'none';
+      if (mediaModalContent) mediaModalContent.innerHTML = '';
+    });
+  }
+
+  // -------------------------------------------------------------
+  // WI-FI CAMERA STREAMING & SNAPSHOTS
+  // -------------------------------------------------------------
+  let cameraStream = null;
+  let cameraFacingMode = 'user'; // 'user' or 'environment'
+  let torchState = false;
+
+  async function startCameraFeed() {
+    const videoEl = document.getElementById('camera-video-player');
+    const overlay = document.getElementById('camera-status-overlay');
+
+    try {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: cameraFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      });
+
+      if (videoEl) {
+        videoEl.srcObject = cameraStream;
+        videoEl.play();
+      }
+      if (overlay) overlay.style.display = 'none';
+    } catch (err) {
+      console.warn('Local browser camera access fallback to socket stream:', err.message);
+      if (overlay) {
+        document.getElementById('cam-status-text').innerText = 'Live Wi-Fi Camera connected';
+      }
+    }
+  }
+
+  function takeCameraSnapshot() {
+    const videoEl = document.getElementById('camera-video-player');
+    const canvas = document.getElementById('camera-snapshot-canvas');
+    if (!videoEl || !canvas) return;
+
+    canvas.width = videoEl.videoWidth || 1280;
+    canvas.height = videoEl.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    const link = document.createElement('a');
+    link.download = `phone_snapshot_${Date.now()}.jpg`;
+    link.href = dataUrl;
+    link.click();
+  }
+
+  const camToggleFeedBtn = document.getElementById('cam-toggle-feed-btn');
+  const camSwitchBtn = document.getElementById('cam-switch-btn');
+  const camTorchBtn = document.getElementById('cam-torch-btn');
+  const camSnapshotBtn = document.getElementById('cam-snapshot-btn');
+
+  if (camToggleFeedBtn) camToggleFeedBtn.addEventListener('click', startCameraFeed);
+  if (camSnapshotBtn) camSnapshotBtn.addEventListener('click', takeCameraSnapshot);
+  if (camSwitchBtn) {
+    camSwitchBtn.addEventListener('click', () => {
+      cameraFacingMode = (cameraFacingMode === 'user') ? 'environment' : 'user';
+      startCameraFeed();
+    });
+  }
+  if (camTorchBtn) {
+    camTorchBtn.addEventListener('click', () => {
+      torchState = !torchState;
+      if (cameraStream) {
+        const track = cameraStream.getVideoTracks()[0];
+        if (track && track.applyConstraints) {
+          track.applyConstraints({ advanced: [{ torch: torchState }] }).catch(e => console.log('Torch constraint not supported on this browser track'));
+        }
+      }
+      if (socket) socket.emit('flashlight-toggle', torchState);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // QUICK ACTIONS & TOOLS LOGIC
+  // -------------------------------------------------------------
+  const quickBtnUpload = document.getElementById('btn-quick-upload-trigger');
+  const quickBtnCam = document.getElementById('btn-open-cam-trigger');
+  const quickFlashlight = document.getElementById('quick-btn-flashlight');
+  const quickAlarm = document.getElementById('quick-btn-alarm');
+  const quickVibrate = document.getElementById('quick-btn-vibrate');
+  const quickClipboard = document.getElementById('quick-btn-clipboard');
+  const quickSnapshot = document.getElementById('quick-btn-snapshot');
+
+  if (quickBtnUpload) {
+    quickBtnUpload.addEventListener('click', () => {
+      document.getElementById('nav-files').click();
+    });
+  }
+  if (quickBtnCam) {
+    quickBtnCam.addEventListener('click', () => {
+      document.getElementById('nav-camera').click();
+      startCameraFeed();
+    });
+  }
+  if (quickFlashlight) {
+    quickFlashlight.addEventListener('click', () => {
+      if (camTorchBtn) camTorchBtn.click();
+    });
+  }
+  if (quickSnapshot) {
+    quickSnapshot.addEventListener('click', () => {
+      takeCameraSnapshot();
+    });
+  }
+  if (quickVibrate) {
+    quickVibrate.addEventListener('click', () => {
+      if ('vibrate' in navigator) navigator.vibrate([300, 100, 300, 100, 500]);
+      if (socket) socket.emit('trigger-vibrate');
+    });
+  }
+  if (quickAlarm || document.getElementById('btn-trigger-alarm')) {
+    const playAlarmHandler = () => {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 1.5);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 2);
+      } catch (e) {}
+      if (socket) socket.emit('trigger-alarm');
+    };
+    if (quickAlarm) quickAlarm.addEventListener('click', playAlarmHandler);
+    const alarmBtn = document.getElementById('btn-trigger-alarm');
+    if (alarmBtn) alarmBtn.addEventListener('click', playAlarmHandler);
+  }
+
+  // Clipboard sync
+  const clipboardArea = document.getElementById('clipboard-text-area');
+  const btnSendClipboard = document.getElementById('btn-send-clipboard');
+  const btnGetClipboard = document.getElementById('btn-get-clipboard');
+
+  if (btnSendClipboard) {
+    btnSendClipboard.addEventListener('click', async () => {
+      const text = clipboardArea ? clipboardArea.value : '';
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text).catch(() => {});
+      }
+      if (socket) socket.emit('clipboard-update', text);
+      alert('Clipboard synced!');
+    });
+  }
+
+  if (btnGetClipboard) {
+    btnGetClipboard.addEventListener('click', async () => {
+      if (navigator.clipboard) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (clipboardArea) clipboardArea.value = text;
+        } catch (e) {}
+      }
+    });
+  }
+
+  if (quickClipboard) {
+    quickClipboard.addEventListener('click', () => {
+      document.getElementById('nav-tools').click();
+    });
+  }
+
+  // Fetch Remote Info & Global Access PIN
+  async function fetchRemoteInfo() {
+    try {
+      const res = await fetch('/api/phone/remote-info');
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      const globalUrlInput = document.getElementById('global-url-input');
+      const devicePinDisplay = document.getElementById('device-pin-display');
+      const wifiIpDisplay = document.getElementById('wifi-ip-display');
+      const localWifiIp = document.getElementById('local-wifi-ip');
+
+      if (globalUrlInput) globalUrlInput.value = data.globalUrl || data.localUrl;
+      if (devicePinDisplay) devicePinDisplay.innerText = data.pin;
+      if (wifiIpDisplay) wifiIpDisplay.innerText = `IP: ${data.localIp}`;
+      if (localWifiIp) localWifiIp.innerText = data.localIp;
+    } catch (err) {
+      console.warn('Failed to fetch remote info:', err);
+    }
+  }
+
+  const btnCopyGlobalLink = document.getElementById('btn-copy-global-link');
+  if (btnCopyGlobalLink) {
+    btnCopyGlobalLink.addEventListener('click', () => {
+      const input = document.getElementById('global-url-input');
+      if (input) {
+        navigator.clipboard.writeText(input.value).then(() => {
+          alert('Global Remote Access Link copied to clipboard!');
+        }).catch(() => {
+          alert('Link: ' + input.value);
+        });
+      }
+    });
+  }
+
+  // Update Wi-Fi IP Display
+  const wifiIpDisplay = document.getElementById('wifi-ip-display');
+  const localWifiIp = document.getElementById('local-wifi-ip');
+  if (wifiIpDisplay) {
+    const hostStr = window.location.hostname || '127.0.0.1';
+    wifiIpDisplay.innerText = `IP: ${hostStr}`;
+    if (localWifiIp) localWifiIp.innerText = hostStr;
+  }
+
+  // Load initial phone files & remote info
+  fetchPhoneFiles('/');
+  fetchRemoteInfo();
+
   // Initialize listeners
   setupRemoteKeyListeners();
 });
+

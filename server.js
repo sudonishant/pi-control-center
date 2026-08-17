@@ -165,9 +165,250 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   });
 });
 
+// Helper for formatting file size bytes
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Phone Storage Base directory
+const STORAGE_BASE = process.env.STORAGE_BASE || path.join(__dirname, 'uploads');
+if (!fs.existsSync(STORAGE_BASE)) {
+  fs.mkdirSync(STORAGE_BASE, { recursive: true });
+}
+
+function safePhonePath(reqPath) {
+  let target = reqPath || '/';
+  if (target === '/' || target === '') {
+    return STORAGE_BASE;
+  }
+  const resolved = path.resolve(STORAGE_BASE, target.replace(/^(\/|\\)+/, ''));
+  if (!resolved.startsWith(STORAGE_BASE)) {
+    return STORAGE_BASE;
+  }
+  return resolved;
+}
+
+// Device Security Token & Quick PIN
+const os = require('os');
+const DEVICE_PAIRING_TOKEN = process.env.DEVICE_TOKEN || crypto.randomBytes(16).toString('hex');
+const DEVICE_PAIRING_PIN = process.env.DEVICE_PIN || Math.floor(100000 + Math.random() * 900000).toString();
+let globalTunnelUrl = null;
+
+function getLocalNetworkIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+// -------------------------------------------------------------
+// GLOBAL REMOTE ACCESS & PAIRING APIS
+// -------------------------------------------------------------
+
+// API to get Local & Global Remote URLs and Security PIN
+app.get('/api/phone/remote-info', (req, res) => {
+  const localIp = getLocalNetworkIp();
+  const localPort = process.env.PORT || 3000;
+  
+  res.json({
+    localIp,
+    localUrl: `http://${localIp}:${localPort}`,
+    globalUrl: globalTunnelUrl || `http://${localIp}:${localPort}`,
+    pairingToken: DEVICE_PAIRING_TOKEN,
+    pin: DEVICE_PAIRING_PIN,
+    deviceName: os.hostname() || 'Android Phone'
+  });
+});
+
+// API to set custom Global Tunnel URL
+app.post('/api/phone/set-tunnel', (req, res) => {
+  const { tunnelUrl } = req.body;
+  if (tunnelUrl) {
+    globalTunnelUrl = tunnelUrl;
+    io.emit('tunnel-updated', { globalUrl: tunnelUrl });
+  }
+  res.json({ success: true, globalUrl: globalTunnelUrl });
+});
+
+// -------------------------------------------------------------
+// WI-FI PHONE FILE MANAGEMENT APIS
+// -------------------------------------------------------------
+
+// 1. List Files & Directories
+app.get('/api/phone/files', (req, res) => {
+  const reqPath = req.query.path || '/';
+  const targetDir = safePhonePath(reqPath);
+
+  fs.readdir(targetDir, { withFileTypes: true }, (err, entries) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to read directory: ' + err.message });
+    }
+
+    const files = entries.map((entry) => {
+      const fullPath = path.join(targetDir, entry.name);
+      let size = 0;
+      let mtime = new Date();
+      try {
+        const stats = fs.statSync(fullPath);
+        size = stats.size;
+        mtime = stats.mtime;
+      } catch (e) {}
+
+      const relativePath = path.relative(STORAGE_BASE, fullPath);
+      const isDir = entry.isDirectory();
+
+      return {
+        name: entry.name,
+        path: '/' + relativePath.replace(/\\/g, '/'),
+        isDir,
+        size,
+        sizeFormatted: formatBytes(size),
+        mtime,
+        ext: path.extname(entry.name).toLowerCase()
+      };
+    });
+
+    files.sort((a, b) => {
+      if (a.isDir && !b.isDir) return -1;
+      if (!a.isDir && b.isDir) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const currentRel = '/' + path.relative(STORAGE_BASE, targetDir).replace(/\\/g, '/');
+
+    res.json({
+      currentPath: currentRel === '/.' ? '/' : currentRel,
+      files
+    });
+  });
+});
+
+// 2. Upload Files to Phone Storage over Wi-Fi
+app.post('/api/phone/upload', upload.array('files'), (req, res) => {
+  const targetDir = safePhonePath(req.body.path || '/');
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+
+  try {
+    for (const file of req.files) {
+      const destPath = path.join(targetDir, file.originalname);
+      fs.renameSync(file.path, destPath);
+    }
+    res.json({ success: true, message: `${req.files.length} file(s) uploaded successfully` });
+  } catch (err) {
+    res.status(500).json({ error: 'Upload failed: ' + err.message });
+  }
+});
+
+// 3. Download File from Phone over Wi-Fi
+app.get('/api/phone/download', (req, res) => {
+  const filePath = safePhonePath(req.query.path);
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  res.download(filePath);
+});
+
+// 4. File Preview (Media, Image, Audio, Video, Text)
+app.get('/api/phone/preview', (req, res) => {
+  const filePath = safePhonePath(req.query.path);
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    return res.status(404).send('File not found');
+  }
+  res.sendFile(filePath);
+});
+
+// 5. Create Directory
+app.post('/api/phone/mkdir', (req, res) => {
+  const { path: reqPath, folderName } = req.body;
+  const parentDir = safePhonePath(reqPath);
+  const newDirPath = path.join(parentDir, folderName || 'New Folder');
+  try {
+    fs.mkdirSync(newDirPath, { recursive: true });
+    res.json({ success: true, message: 'Folder created successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Delete File or Directory
+app.post('/api/phone/delete', (req, res) => {
+  const { path: reqPath } = req.body;
+  const targetPath = safePhonePath(reqPath);
+  try {
+    if (fs.statSync(targetPath).isDirectory()) {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(targetPath);
+    }
+    res.json({ success: true, message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Rename File or Directory
+app.post('/api/phone/rename', (req, res) => {
+  const { oldPath, newName } = req.body;
+  const targetPath = safePhonePath(oldPath);
+  const parentDir = path.dirname(targetPath);
+  const newPath = path.join(parentDir, newName);
+  try {
+    fs.renameSync(targetPath, newPath);
+    res.json({ success: true, message: 'Renamed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Socket.io Handlers
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
+
+  // Real-time Phone Camera Streaming & Control WebSockets
+  socket.on('camera-stream-frame', (data) => {
+    socket.broadcast.emit('camera-frame', data);
+  });
+
+  socket.on('camera-snapshot-trigger', (options) => {
+    io.emit('take-snapshot', options);
+  });
+
+  socket.on('flashlight-toggle', (state) => {
+    io.emit('flashlight-state', state);
+  });
+
+  socket.on('clipboard-update', (text) => {
+    io.emit('clipboard-sync', text);
+  });
+
+  socket.on('trigger-alarm', () => {
+    io.emit('play-alarm-sound');
+  });
+
+  socket.on('trigger-vibrate', () => {
+    io.emit('device-vibrate');
+  });
+
+  socket.on('device-stats-report', (stats) => {
+    socket.broadcast.emit('device-stats-update', stats);
+  });
+
+  socket.on('send-toast', (message) => {
+    io.emit('display-toast', message);
+  });
 
   // 1. Establish SSH connection
   socket.on('ssh-connect', (config) => {
