@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { Client } = require('ssh2');
+const { spawn } = require('child_process');
+const { Duplex } = require('stream');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -9,6 +11,30 @@ const WebSocket = require('ws');
 const net = require('net');
 const url = require('url');
 const crypto = require('crypto');
+
+function createAdbStream(host, port = 22) {
+  const adb = spawn('adb', ['shell', 'toybox', 'nc', host, String(port)]);
+  
+  const stream = new Duplex({
+    read(size) {},
+    write(chunk, encoding, callback) {
+      if (adb.stdin.writable) {
+        adb.stdin.write(chunk, encoding, callback);
+      } else {
+        callback(new Error('ADB stdin closed'));
+      }
+    }
+  });
+
+  adb.stdout.on('data', (data) => stream.push(data));
+  adb.stdout.on('end', () => stream.push(null));
+  adb.stderr.on('data', (err) => console.error('ADB Tunnel stderr:', err.toString()));
+  
+  adb.on('close', () => stream.emit('close'));
+  adb.on('error', (err) => stream.emit('error', err));
+
+  return stream;
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -188,6 +214,54 @@ io.on('connection', (socket) => {
     });
 
     ssh.on('error', (err) => {
+      if (!sshConfig.sock && (err.code === 'ENETUNREACH' || err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED')) {
+        console.warn(`Direct connection to ${config.host} failed (${err.code}). Retrying via ADB Duplex Stream bridge...`);
+        try {
+          const adbStream = createAdbStream(config.host, config.port || 22);
+          const fallbackConfig = { ...sshConfig, sock: adbStream };
+          delete fallbackConfig.host;
+          delete fallbackConfig.port;
+
+          const retrySsh = new Client();
+          retrySsh.on('ready', () => {
+            console.log(`SSH connection established via ADB Stream for socket ${socket.id}`);
+            const sessionToken = crypto.randomBytes(32).toString('hex');
+            connections.set(socket.id, {
+              sshClient: retrySsh,
+              sftpClient: null,
+              statsInterval: null,
+              sessionToken,
+              targetHost: config.host
+            });
+
+            socket.emit('ssh-connected', {
+              host: config.host,
+              username: config.username,
+              sessionToken
+            });
+
+            startStatsInterval(socket);
+          });
+
+          retrySsh.on('error', (retryErr) => {
+            console.error(`ADB Stream SSH error for socket ${socket.id}:`, retryErr);
+            socket.emit('ssh-error', `Connection error: ${retryErr.message}`);
+            clearSocketConnection(socket.id);
+          });
+
+          retrySsh.on('close', () => {
+            console.log(`SSH connection closed for socket ${socket.id}`);
+            socket.emit('ssh-disconnected');
+            clearSocketConnection(socket.id);
+          });
+
+          retrySsh.connect(fallbackConfig);
+          return;
+        } catch (retryException) {
+          console.error('Failed to create ADB stream fallback:', retryException);
+        }
+      }
+
       console.error(`SSH connection error for socket ${socket.id}:`, err);
       socket.emit('ssh-error', `Connection error: ${err.message}`);
       clearSocketConnection(socket.id);

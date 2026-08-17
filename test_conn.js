@@ -22,7 +22,7 @@ conn.on('ready', () => {
   process.exit(1);
 }).connect({
   host: host,
-  port: 22,
+  port: parseInt(process.argv[5]) || 22,
   username: username,
   password: password,
   readyTimeout: 10000
