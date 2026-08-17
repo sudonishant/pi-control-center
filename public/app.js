@@ -1,13 +1,11 @@
 // PiControl Application Logic
 window.onerror = function(message, source, lineno, colno, error) {
-  const errorMsg = `JavaScript Error: ${message}\nFile: ${source.split('/').pop()}\nLine: ${lineno}:${colno}`;
+  const errorMsg = `JavaScript Error: ${message}\nFile: ${source ? source.split('/').pop() : ''}\nLine: ${lineno}:${colno}`;
   console.error(errorMsg);
-  alert(errorMsg);
 };
 window.addEventListener('unhandledrejection', function(event) {
   const errorMsg = `Unhandled Promise Rejection: ${event.reason ? (event.reason.message || event.reason) : 'unknown'}`;
   console.error(errorMsg);
-  alert(errorMsg);
 });
 
 if ('serviceWorker' in navigator) {

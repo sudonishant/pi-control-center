@@ -15,8 +15,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   
-  <!-- Xterm.js Terminal CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <!-- Xterm.js Terminal CSS (Local Bundle) -->
+  <link rel="stylesheet" href="vendor/xterm.min.css" />
   <!-- Custom Stylesheet -->
   <link rel="stylesheet" href="style.css">
   <!-- WebCrypto Subtle Polyfill Shim for Non-Secure (HTTP) LAN Contexts -->
@@ -58,8 +58,8 @@
       }
     })();
   </script>
-  <!-- Lucide Icons -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js"></script>
+  <!-- Lucide Icons (Local Bundle) -->
+  <script src="vendor/lucide.min.js"></script>
 </head>
 <body>
 
@@ -563,12 +563,13 @@
     </div>
   </div>
 
-  <!-- Socket.io client JS -->
-  <script src="/socket.io/socket.io.js"></script>
-  <!-- Xterm.js Terminal JS -->
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-  <!-- Xterm.js Fit Addon JS -->
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <!-- Socket.io client JS (Local Bundle with Fallback) -->
+  <script src="vendor/socket.io.min.js"></script>
+  <script>if (typeof io === 'undefined') document.write('<script src="/socket.io/socket.io.js"><\/script>');</script>
+  <!-- Xterm.js Terminal JS (Local Bundle) -->
+  <script src="vendor/xterm.min.js"></script>
+  <!-- Xterm.js Fit Addon JS (Local Bundle) -->
+  <script src="vendor/xterm-addon-fit.min.js"></script>
   <!-- Main Application Logic JS -->
   <script src="app.js"></script>
 </body>
