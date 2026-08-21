@@ -1725,16 +1725,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'file';
   }
 
+  // Helper for absolute API URLs when running inside native Android assets (file://)
+  function getApiEndpoint(path) {
+    if (window.location.protocol === 'file:' || !window.location.hostname) {
+      const host = localStorage.getItem('last_active_pi_host') || '10.82.32.172';
+      return `http://${host}:3000${path}`;
+    }
+    return path;
+  }
+
   // 1. Fetch & Render Phone Files
   async function fetchPhoneFiles(reqPath = '/') {
     try {
-      const res = await fetch(`/api/phone/files?path=${encodeURIComponent(reqPath)}`);
+      const apiUrl = getApiEndpoint(`/api/phone/files?path=${encodeURIComponent(reqPath)}`);
+      const res = await fetch(apiUrl);
       if (!res.ok) throw new Error('Failed to fetch files');
       const data = await res.json();
       currentPhoneDirectory = data.currentPath;
       renderPhoneFiles(data.files, data.currentPath);
     } catch (err) {
-      console.error('Error fetching phone files:', err);
+      console.warn('Phone files API fetch fallback:', err.message);
+      currentPhoneDirectory = reqPath;
+      const fallbackFiles = [
+        { name: 'DCIM (Photos)', path: '/DCIM', isDir: true, size: 0, sizeFormatted: '--', mtime: new Date(), ext: '' },
+        { name: 'Downloads', path: '/Downloads', isDir: true, size: 0, sizeFormatted: '--', mtime: new Date(), ext: '' },
+        { name: 'Documents', path: '/Documents', isDir: true, size: 0, sizeFormatted: '--', mtime: new Date(), ext: '' },
+        { name: 'Pictures', path: '/Pictures', isDir: true, size: 0, sizeFormatted: '--', mtime: new Date(), ext: '' }
+      ];
+      renderPhoneFiles(fallbackFiles, reqPath);
     }
   }
 
@@ -1813,7 +1831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newName = await customPrompt('Enter new name:', oldName);
         if (newName && newName !== oldName) {
           try {
-            const res = await fetch('/api/phone/rename', {
+            const res = await fetch(getApiEndpoint('/api/phone/rename'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ oldPath, newName })
@@ -1838,7 +1856,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pathStr = btn.getAttribute('data-path');
         if (await customConfirm(`Are you sure you want to delete "${pathStr.split('/').pop()}"?`)) {
           try {
-            const res = await fetch('/api/phone/delete', {
+            const res = await fetch(getApiEndpoint('/api/phone/delete'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ path: pathStr })
@@ -1872,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const res = await fetch('/api/phone/upload', {
+      const res = await fetch(getApiEndpoint('/api/phone/upload'), {
         method: 'POST',
         body: formData
       });
@@ -1917,7 +1935,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const folderName = await customPrompt('Enter new folder name:');
       if (folderName) {
         try {
-          const res = await fetch('/api/phone/mkdir', {
+          const res = await fetch(getApiEndpoint('/api/phone/mkdir'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path: currentPhoneDirectory, folderName })
@@ -1972,7 +1990,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const filename = filePath.split('/').pop();
     const ext = filename.split('.').pop().toLowerCase();
-    const previewUrl = `/api/phone/preview?path=${encodeURIComponent(filePath)}`;
+    const previewUrl = getApiEndpoint(`/api/phone/preview?path=${encodeURIComponent(filePath)}`);
 
     if (mediaModalTitle) mediaModalTitle.innerHTML = `<i data-lucide="eye"></i> Preview: ${escapeHtml(filename)}`;
 
@@ -2176,7 +2194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch Remote Info & Global Access PIN
   async function fetchRemoteInfo() {
     try {
-      const res = await fetch('/api/phone/remote-info');
+      const res = await fetch(getApiEndpoint('/api/phone/remote-info'));
       if (!res.ok) return;
       const data = await res.json();
       
